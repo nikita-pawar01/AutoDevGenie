@@ -1,0 +1,6 @@
+# Python dependencies for AutoDevGenie backend
+fastapi
+uvicorn
+motor
+pydantic
+python-dotenv 
