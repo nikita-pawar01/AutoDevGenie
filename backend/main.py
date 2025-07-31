@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
-from models import Employee, Project
+from models import Employee, Project, FileMeta, BugReport
 from database import employee_collection, project_collection
 from typing import List
 from bson import ObjectId
@@ -51,4 +51,25 @@ async def get_projects():
     projects = []
     async for project in project_collection.find():
         projects.append(doc_to_dict(project))
-    return projects 
+    return projects
+
+# Bug Analysis Endpoint
+@app.post("/analyze/", response_model=List[BugReport])
+async def analyze_project(
+    files: List[FileMeta] = Body(...),
+    developers: List[str] = Body(...)
+):
+    # Dummy bug analysis logic for demonstration
+    bugs = []
+    if files:
+        for idx, file in enumerate(files):
+            bugs.append(BugReport(
+                id=idx+1,
+                file=file.name,
+                line=7,
+                type="Null Reference",
+                severity="High",
+                description="Potential null reference error when accessing object properties",
+                assignedTo=developers[0] if developers else None
+            ))
+    return bugs 
