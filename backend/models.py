@@ -1,11 +1,37 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
+from enum import Enum
+
+class Role(str, Enum):
+    PROJECT_MANAGER = "project_manager"
+    DEVELOPER = "developer"
+    QA = "qa"
 
 class FileMeta(BaseModel):
     name: str
     size: int
     type: str
     path: str
+
+class User(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: Role
+    githubUsername: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: Role
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: Role
+    hasGithubAccount: bool = False
+    githubUsername: Optional[str] = None
 
 class Employee(BaseModel):
     name: str

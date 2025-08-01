@@ -1,11 +1,35 @@
 "use client"
 
+import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, FolderPlus, Eye, Sparkles, Code, Bug, Zap } from "lucide-react"
+import { Users, FolderPlus, Eye, Sparkles, Code, Bug, Zap, LogOut, User, Shield, Github } from "lucide-react"
 import Link from "next/link"
 
 export default function HomePage() {
+  const { user, logout, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-purple-50 to-purple-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'project_manager':
+        return 'Project Manager';
+      case 'developer':
+        return 'Developer';
+      case 'qa':
+        return 'QA Engineer';
+      default:
+        return role;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-purple-50 to-purple-100">
       {/* Header */}
@@ -23,11 +47,45 @@ export default function HomePage() {
                 <p className="text-sm text-gray-600">Intelligent Bug Detection & Team Management</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span>AI Powered</span>
               </div>
+              {isAuthenticated ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <span>Welcome, {user?.name}</span>
+                  </div>
+                  <Link href="/dashboard">
+                    <Button size="sm" className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Button
+                    onClick={logout}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Link href="/login">
+                    <Button variant="outline" size="sm">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm" className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
+                      Get Started
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -35,24 +93,59 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-6 py-12">
-        <div className="text-center space-y-6 mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-            <Zap className="h-4 w-4" />
-            Powered by Advanced AI
+        {isAuthenticated ? (
+          // Authenticated User Welcome Section
+          <div className="text-center space-y-6 mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+              <Zap className="h-4 w-4" />
+              Welcome back, {user?.name}!
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 leading-tight">
+              Ready to{" "}
+              <span className="bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+                Manage Projects
+              </span>
+              <br />
+              and Detect Bugs?
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              You're logged in as a {getRoleDisplayName(user?.role || '')}. Access your personalized dashboard to manage projects, 
+              view bug reports, and collaborate with your team.
+            </p>
           </div>
-          <h2 className="text-5xl font-bold text-gray-900 leading-tight">
-            Detect Bugs,{" "}
-            <span className="bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
-              Assign Tasks
-            </span>
-            <br />
-            Boost Productivity
-          </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Upload your projects, let our AI detect bugs automatically, and assign them to your team members. Support
-            for all programming languages with intelligent code analysis.
-          </p>
-        </div>
+        ) : (
+          // Non-authenticated User Welcome Section
+          <div className="text-center space-y-6 mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+              <Zap className="h-4 w-4" />
+              Powered by Advanced AI
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 leading-tight">
+              Detect Bugs,{" "}
+              <span className="bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+                Assign Tasks
+              </span>
+              <br />
+              Boost Productivity
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Upload your projects, let our AI detect bugs automatically, and assign them to your team members. Support
+              for all programming languages with intelligent code analysis.
+            </p>
+            <div className="flex justify-center gap-4">
+              <Link href="/register">
+                <Button size="lg" className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
+                  Get Started Free
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button size="lg" variant="outline">
+                  Sign In
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Main Action Cards */}
         <div className="grid md:grid-cols-3 gap-8 mb-16">
@@ -163,6 +256,8 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+      
       </div>
     </div>
   )
