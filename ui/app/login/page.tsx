@@ -9,56 +9,39 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/auth-context';
-import { Sparkles, Github, User, Mail, Lock, Shield } from 'lucide-react';
+import { Sparkles, Mail, Lock, Shield, LogIn } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-const registerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(1, 'Password is required'),
   role: z.enum(['project_manager', 'developer', 'qa']),
-  hasGithubAccount: z.boolean(),
-  githubUsername: z.string().optional(),
-}).refine((data) => {
-  if (data.hasGithubAccount && !data.githubUsername) {
-    return false;
-  }
-  return true;
-}, {
-  message: "GitHub username is required when you have a GitHub account",
-  path: ["githubUsername"],
 });
 
-type RegisterFormData = z.infer<typeof registerSchema>;
+type LoginFormData = z.infer<typeof loginSchema>;
 
-export default function RegisterPage() {
-  const { register: registerUser } = useAuth();
+export default function LoginPage() {
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [hasGithubAccount, setHasGithubAccount] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      hasGithubAccount: false,
-    },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = async (data: RegisterFormData) => {
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      await registerUser(data);
-      toast.success('Registration successful! Please log in.');
+      await login(data);
+      toast.success('Login successful!');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Registration failed');
+      toast.error(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -77,38 +60,20 @@ export default function RegisterPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
                 AutoDevGenie
               </h1>
-              <p className="text-sm text-gray-600">Join the team</p>
+              <p className="text-sm text-gray-600">Welcome back</p>
             </div>
           </div>
         </div>
 
         <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-gray-900">Create Account</CardTitle>
+            <CardTitle className="text-2xl font-bold text-gray-900">Sign In</CardTitle>
             <CardDescription className="text-gray-600">
-              Join AutoDevGenie and start managing your projects efficiently
+              Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Name Field */}
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                  <User className="inline h-4 w-4 mr-2" />
-                  Full Name
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Enter your full name"
-                  {...register('name')}
-                  className="border-gray-200 focus:border-purple-500 focus:ring-purple-500"
-                />
-                {errors.name && (
-                  <p className="text-sm text-red-600">{errors.name.message}</p>
-                )}
-              </div>
-
               {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-gray-700">
@@ -136,7 +101,7 @@ export default function RegisterPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Create a password"
+                  placeholder="Enter your password"
                   {...register('password')}
                   className="border-gray-200 focus:border-purple-500 focus:ring-purple-500"
                 />
@@ -166,59 +131,31 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              {/* GitHub Account Checkbox */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hasGithubAccount"
-                  checked={hasGithubAccount}
-                  onCheckedChange={(checked) => {
-                    setHasGithubAccount(checked as boolean);
-                    setValue('hasGithubAccount', checked as boolean);
-                    if (!checked) {
-                      setValue('githubUsername', '');
-                    }
-                  }}
-                />
-                <Label htmlFor="hasGithubAccount" className="text-sm font-medium text-gray-700">
-                  Do you have a GitHub account?
-                </Label>
-              </div>
-
-              {/* GitHub Username Field (Conditional) */}
-              {hasGithubAccount && (
-                <div className="space-y-2">
-                  <Label htmlFor="githubUsername" className="text-sm font-medium text-gray-700">
-                    <Github className="inline h-4 w-4 mr-2" />
-                    GitHub Username
-                  </Label>
-                  <Input
-                    id="githubUsername"
-                    type="text"
-                    placeholder="Enter your GitHub username"
-                    {...register('githubUsername')}
-                    className="border-gray-200 focus:border-purple-500 focus:ring-purple-500"
-                  />
-                  {errors.githubUsername && (
-                    <p className="text-sm text-red-600">{errors.githubUsername.message}</p>
-                  )}
-                </div>
-              )}
-
               {/* Submit Button */}
               <Button
                 type="submit"
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
               >
-                {isLoading ? 'Creating Account...' : 'Create Account'}
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Sign In
+                  </>
+                )}
               </Button>
 
-              {/* Login Link */}
+              {/* Register Link */}
               <div className="text-center">
                 <p className="text-sm text-gray-600">
-                  Already have an account?{' '}
-                  <Link href="/login" className="text-purple-600 hover:text-purple-700 font-medium">
-                    Sign in
+                  Don't have an account?{' '}
+                  <Link href="/register" className="text-purple-600 hover:text-purple-700 font-medium">
+                    Create one
                   </Link>
                 </p>
               </div>

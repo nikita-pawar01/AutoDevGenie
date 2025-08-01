@@ -1,457 +1,487 @@
-"use client"
+'use client';
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import {
-  Bot,
-  Users,
-  Plus,
-  Code,
-  Server,
-  Layers,
-  Github,
+import { useEffect } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { 
+  Users, 
+  FolderPlus, 
+  Eye, 
+  Sparkles, 
+  LogOut, 
+  User, 
+  Shield, 
+  Github, 
+  Home, 
+  Mail, 
   Calendar,
-  ArrowLeft,
-  Search,
-  Filter,
-  MoreVertical,
+  Clock,
   Star,
   TrendingUp,
-} from "lucide-react"
-import Link from "next/link"
-import { Textarea } from "@/components/ui/textarea"
-
-type Employee = {
-  id: string
-  name: string
-  role: string
-  experience: number
-  projectList: string[]
-  githubUsername: string
-  createdAt?: string
-  avatar?: string
-}
-
-type Project = {
-  id: string
-  name: string
-  description: string
-  assignedEmployees: string[]
-  status: string
-  progress: number
-  createdAt?: string
-}
+  Code,
+  Bug,
+  Settings,
+  Activity
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedRole, setSelectedRole] = useState("all")
-  const [newProject, setNewProject] = useState({
-    name: "",
-    description: "",
-    assignedEmployees: [] as string[],
-  })
+  const { user, logout, isAuthenticated, loading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchEmployees = async () => {
-      const res = await fetch("http://localhost:8000/employees/")
-      const data = await res.json()
-      setEmployees(data)
+    if (!loading && !isAuthenticated) {
+      router.push('/login');
     }
-    const fetchProjects = async () => {
-      const res = await fetch("http://localhost:8000/projects/")
-      const data = await res.json()
-      setProjects(data)
-    }
-    fetchEmployees()
-    fetchProjects()
-  }, [])
+  }, [loading, isAuthenticated, router]);
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newProject.name.trim()) return
-    try {
-      const response = await fetch("http://localhost:8000/projects/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newProject,
-          status: "planning",
-          progress: 0,
-        }),
-      })
-      if (response.ok) {
-        const created = await response.json()
-        setProjects([...projects, { ...newProject, id: created.id, status: "planning", progress: 0 }])
-        setNewProject({ name: "", description: "", assignedEmployees: [] })
-      }
-    } catch (error) {
-      // handle error (optional)
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-purple-50 to-purple-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
   }
 
-  const filteredEmployees = employees.filter((employee) => {
-    const matchesSearch =
-      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.githubUsername.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = selectedRole === "all" || employee.role === selectedRole
-    return matchesSearch && matchesRole
-  })
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'project_manager':
+        return 'Project Manager';
+      case 'developer':
+        return 'Developer';
+      case 'qa':
+        return 'QA Engineer';
+      default:
+        return role;
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'project_manager':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'developer':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'qa':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case "frontend":
-        return <Code className="h-4 w-4" />
-      case "backend":
-        return <Server className="h-4 w-4" />
-      case "devops":
-        return <Layers className="h-4 w-4" />
+      case 'project_manager':
+        return <Users className="h-4 w-4" />;
+      case 'developer':
+        return <Code className="h-4 w-4" />;
+      case 'qa':
+        return <Bug className="h-4 w-4" />;
       default:
-        return <Users className="h-4 w-4" />
+        return <User className="h-4 w-4" />;
     }
-  }
+  };
 
-  const getRoleBadgeColor = (role: string) => {
+  const getRoleDescription = (role: string) => {
     switch (role) {
-      case "frontend":
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      case "backend":
-        return "bg-green-100 text-green-800 border-green-200"
-      case "devops":
-        return "bg-purple-100 text-purple-800 border-purple-200"
+      case 'project_manager':
+        return 'Lead project planning, team coordination, and resource management';
+      case 'developer':
+        return 'Write, test, and maintain code for software applications';
+      case 'qa':
+        return 'Ensure software quality through testing and quality assurance';
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return 'Member of the development team';
     }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "planning":
-        return "bg-yellow-100 text-yellow-800"
-      case "completed":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-white via-purple-50 to-purple-100">
       {/* Header */}
-      <header className="border-b bg-white/90 backdrop-blur-md shadow-sm">
-        <div className="container mx-auto px-4 py-4">
+      <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Bot className="h-8 w-8 text-blue-600" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">AutoDevGenie Dashboard</h1>
-                <p className="text-sm text-gray-500">Manage your AI-powered development team</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+                  AutoDevGenie
+                </h1>
+                <p className="text-sm text-gray-600">Personal Dashboard</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <Link href="/register">
-                <Button variant="outline" className="border-blue-200 hover:bg-blue-50 bg-transparent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Employee
-                </Button>
-              </Link>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Welcome, {user?.name}</span>
+              </div>
               <Link href="/">
-                <Button variant="outline" className="border-gray-300 bg-transparent">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="flex items-center gap-2">
+                  <Home className="h-4 w-4" />
                   Home
                 </Button>
               </Link>
+              <Button
+                onClick={logout}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>
-      </header>
-
-      {/* Dashboard Stats */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{employees.length}</p>
-                  <p className="text-sm text-gray-600">Team Members</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Star className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
-                  <p className="text-sm text-gray-600">Active Projects</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">94%</p>
-                  <p className="text-sm text-gray-600">Efficiency</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Code className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">1.2k</p>
-                  <p className="text-sm text-gray-600">Code Reviews</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
-      {/* Dashboard Content */}
-      <main className="container mx-auto px-4 pb-8">
-        <Tabs defaultValue="employees" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 h-12 bg-white shadow-sm">
-            <TabsTrigger value="employees" className="flex items-center space-x-2 text-base">
-              <Users className="h-4 w-4" />
-              <span>Team Members</span>
-            </TabsTrigger>
-            <TabsTrigger value="projects" className="flex items-center space-x-2 text-base">
-              <Plus className="h-4 w-4" />
-              <span>Project Management</span>
-            </TabsTrigger>
-          </TabsList>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {user?.name}! 👋
+          </h2>
+          <p className="text-gray-600">
+            Here's your personalized dashboard with all your account details and quick actions.
+          </p>
+        </div>
 
-          {/* Employees Tab */}
-          <TabsContent value="employees" className="space-y-6">
-            {/* Search and Filter */}
-            <Card className="border-0 shadow-md">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search employees..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 h-10"
-                    />
+        {/* User Profile Section */}
+        <div className="grid lg:grid-cols-3 gap-8 mb-8">
+          {/* Main Profile Card */}
+          <div className="lg:col-span-2">
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Your Profile
+                </CardTitle>
+                <CardDescription>
+                  Complete overview of your account information
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Personal Information */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Personal Information
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <p className="text-sm text-gray-600">Email Address</p>
+                          <p className="font-medium">{user?.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Shield className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <p className="text-sm text-gray-600">Role</p>
+                          <div className="flex items-center gap-2">
+                            <Badge className={`${getRoleColor(user?.role || '')} border`}>
+                              <div className="flex items-center gap-1">
+                                {getRoleIcon(user?.role || '')}
+                                <span className="font-medium">{getRoleDisplayName(user?.role || '')}</span>
+                              </div>
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      {user?.githubUsername && (
+                        <div className="flex items-center gap-3">
+                          <Github className="h-4 w-4 text-gray-400" />
+                          <div>
+                            <p className="text-sm text-gray-600">GitHub Profile</p>
+                            <a
+                              href={`https://github.com/${user.githubUsername}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 hover:underline"
+                            >
+                              @{user.githubUsername}
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Filter className="h-4 w-4 text-gray-400" />
-                    <select
-                      value={selectedRole}
-                      onChange={(e) => setSelectedRole(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-                    >
-                      <option value="all">All Roles</option>
-                      <option value="frontend">Frontend</option>
-                      <option value="backend">Backend</option>
-                      <option value="devops">DevOps</option>
-                    </select>
+
+                  {/* Role Information */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Role Details
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Role Description</p>
+                        <p className="text-sm text-gray-700">{getRoleDescription(user?.role || '')}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <p className="text-sm text-gray-600">Member Since</p>
+                          <p className="font-medium">Today</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Activity className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <p className="text-sm text-gray-600">Status</p>
+                          <Badge className="bg-green-100 text-green-800 border-green-200">
+                            Active
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="space-y-6">
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Quick Stats</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Star className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900">0</p>
+                      <p className="text-sm text-gray-600">Projects</p>
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900">0</p>
+                      <p className="text-sm text-gray-600">Tasks</p>
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Clock className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900">0h</p>
+                      <p className="text-sm text-gray-600">Hours</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Employee Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredEmployees.map((employee) => (
-                <Card
-                  key={employee.id}
-                  className="hover:shadow-xl transition-all duration-300 border-0 shadow-md group"
-                >
-                  <CardHeader className="pb-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
-                          {employee.avatar}
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg text-gray-900">{employee.name}</CardTitle>
-                          <p className="text-sm text-gray-500">@{employee.githubUsername}</p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+            
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm mb-8">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>
+              Based on your role as a {getRoleDisplayName(user?.role || '')}, here are some actions you can take
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-6">
+              <Link href="/developers">
+                <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 cursor-pointer transform hover:-translate-y-2">
+                  <CardHeader className="text-center pb-4">
+                    <div className="mx-auto p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300">
+                      <Users className="h-8 w-8 text-white" />
                     </div>
+                    <CardTitle className="text-xl font-bold text-gray-900">Manage Team</CardTitle>
+                    <CardDescription className="text-gray-600">
+                      View and manage your development team
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Badge className={`${getRoleBadgeColor(employee.role)} border`}>
-                        <div className="flex items-center space-x-1">
-                          {getRoleIcon(employee.role)}
-                          <span className="capitalize font-medium">{employee.role}</span>
-                        </div>
-                      </Badge>
-                      <div className="flex items-center space-x-1 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        <span>{employee.experience}y exp</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2 text-sm">
-                      <Github className="h-4 w-4 text-gray-400" />
-                      <a
-                        href={`https://github.com/${employee.githubUsername}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline font-medium"
-                      >
-                        View Profile
-                      </a>
-                    </div>
-
-                    {employee.projectList.length > 0 && (
-                      <div>
-                        <p className="text-sm font-semibold mb-2 text-gray-700">Recent Projects:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {employee.projectList.slice(0, 2).map((project, index) => (
-                            <Badge key={index} variant="outline" className="text-xs bg-gray-50">
-                              {project}
-                            </Badge>
-                          ))}
-                          {employee.projectList.length > 2 && (
-                            <Badge variant="outline" className="text-xs bg-gray-50">
-                              +{employee.projectList.length - 2} more
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                  <CardContent className="text-center">
+                    <Button className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0">
+                      View Team
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          </TabsContent>
+              </Link>
 
-          {/* Projects Tab */}
-          <TabsContent value="projects" className="space-y-6">
-            <div className="grid lg:grid-cols-2 gap-8">
-              {/* Create New Project */}
-              <Card className="border-0 shadow-md">
-                <CardHeader>
-                  <CardTitle className="text-xl">Create New Project</CardTitle>
-                  <CardDescription>Set up a new project with AI-powered assistance</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleCreateProject} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="projectName" className="text-sm font-semibold">
-                        Project Name
-                      </Label>
-                      <Input
-                        id="projectName"
-                        placeholder="Enter project name"
-                        value={newProject.name}
-                        onChange={(e) => setNewProject((prev) => ({ ...prev, name: e.target.value }))}
-                        className="h-10"
-                        required
-                      />
+              <Link href="/create-project">
+                <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 cursor-pointer transform hover:-translate-y-2">
+                  <CardHeader className="text-center pb-4">
+                    <div className="mx-auto p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300">
+                      <FolderPlus className="h-8 w-8 text-white" />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="projectDescription" className="text-sm font-semibold">
-                        Description
-                      </Label>
-                      <Textarea
-                        id="projectDescription"
-                        placeholder="Describe the project goals and requirements..."
-                        value={newProject.description}
-                        onChange={(e) => setNewProject((prev) => ({ ...prev, description: e.target.value }))}
-                        rows={4}
-                        className="resize-none"
-                      />
-                    </div>
-
-                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-10">
-                      <Plus className="h-4 w-4 mr-2" />
+                    <CardTitle className="text-xl font-bold text-gray-900">Create Project</CardTitle>
+                    <CardDescription className="text-gray-600">
+                      Start a new project with AI assistance
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <Button className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
                       Create Project
                     </Button>
-                  </form>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
 
-              {/* Existing Projects */}
-              <Card className="border-0 shadow-md">
-                <CardHeader>
-                  <CardTitle className="text-xl">Active Projects</CardTitle>
-                  <CardDescription>Monitor and manage your current projects</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {projects.map((project) => (
-                      <div
-                        key={project.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h4 className="font-semibold text-gray-900">{project.name}</h4>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{project.description}</p>
-                          </div>
-                          <Badge className={getStatusColor(project.status)}>{project.status}</Badge>
-                        </div>
-
-                        <div className="flex items-center justify-between text-sm mb-3">
-                          <div className="flex items-center space-x-4">
-                            <span className="text-gray-600">
-                              <Users className="h-4 w-4 inline mr-1" />
-                              {project.assignedEmployees.length} members
-                            </span>
-                            <span className="text-gray-600">Progress: {project.progress}%</span>
-                          </div>
-                          <span className="text-gray-500">{new Date(project.createdAt || '').toLocaleDateString()}</span>
-                        </div>
-
-                        <div className="bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${project.progress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <Link href="/projects">
+                <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-gradient-to-br from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 cursor-pointer transform hover:-translate-y-2">
+                  <CardHeader className="text-center pb-4">
+                    <div className="mx-auto p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl w-fit group-hover:scale-110 transition-transform duration-300">
+                      <Eye className="h-8 w-8 text-white" />
+                    </div>
+                    <CardTitle className="text-xl font-bold text-gray-900">View Projects</CardTitle>
+                    <CardDescription className="text-gray-600">
+                      Browse and manage your projects
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <Button className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-0">
+                      View Projects
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Link>
             </div>
-          </TabsContent>
-        </Tabs>
-      </main>
+          </CardContent>
+        </Card>
+
+        {/* Role-specific Information */}
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle>Role-specific Features</CardTitle>
+            <CardDescription>
+              Features and capabilities available to you as a {getRoleDisplayName(user?.role || '')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              {user?.role === 'project_manager' && (
+                <>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Team Management
+                    </h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      Create and manage development teams, assign roles, and track team performance
+                    </p>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• Add and remove team members</li>
+                      <li>• Assign roles and responsibilities</li>
+                      <li>• Monitor team productivity</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                      <FolderPlus className="h-4 w-4" />
+                      Project Oversight
+                    </h4>
+                    <p className="text-sm text-purple-700 mb-3">
+                      Oversee project development, set milestones, and ensure timely delivery
+                    </p>
+                    <ul className="text-sm text-purple-700 space-y-1">
+                      <li>• Create and manage projects</li>
+                      <li>• Set project timelines</li>
+                      <li>• Track project progress</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+              {user?.role === 'developer' && (
+                <>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                      <Code className="h-4 w-4" />
+                      Code Development
+                    </h4>
+                    <p className="text-sm text-green-700 mb-3">
+                      Write, test, and maintain code with AI-powered assistance
+                    </p>
+                    <ul className="text-sm text-green-700 space-y-1">
+                      <li>• Upload code for analysis</li>
+                      <li>• Receive bug detection reports</li>
+                      <li>• Access code optimization suggestions</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      <Bug className="h-4 w-4" />
+                      Bug Tracking
+                    </h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      View assigned bugs and track their resolution status
+                    </p>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• View assigned bug reports</li>
+                      <li>• Update bug status</li>
+                      <li>• Collaborate on bug fixes</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+              {user?.role === 'qa' && (
+                <>
+                  <div className="p-4 bg-orange-50 rounded-lg">
+                    <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
+                      <Bug className="h-4 w-4" />
+                      Quality Assurance
+                    </h4>
+                    <p className="text-sm text-orange-700 mb-3">
+                      Ensure software quality through comprehensive testing
+                    </p>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      <li>• Review bug reports</li>
+                      <li>• Validate bug fixes</li>
+                      <li>• Create test cases</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-lg">
+                    <h4 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      Testing Management
+                    </h4>
+                    <p className="text-sm text-red-700 mb-3">
+                      Manage testing processes and ensure quality standards
+                    </p>
+                    <ul className="text-sm text-red-700 space-y-1">
+                      <li>• Create test plans</li>
+                      <li>• Execute test cases</li>
+                      <li>• Report testing results</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  )
+  );
 }
