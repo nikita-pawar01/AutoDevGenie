@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ChevronRight, ChevronDown, File, Bug, Users, FolderOpen, ArrowLeft } from "lucide-react"
+import { ChevronRight, ChevronDown, File, Bug, Users, FolderOpen, ArrowLeft, Lightbulb, AlertTriangle, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -22,10 +22,33 @@ export default function CodeViewer() {
   const searchParams = useSearchParams()
   const projectId = searchParams.get("project")
   
+  interface BugReport {
+    id: number;
+    file: string;
+    line: number;
+    type: string;
+    severity: 'High' | 'Medium' | 'Low';
+    description: string;
+    assignedTo: typeof availableDevelopers[0];
+  }
+
+  interface AnalysisResult {
+    bugs: BugReport[];
+    suggestions: string[];
+    qualityScore: number;
+    explanation: string;
+  }
+
   const [project, setProject] = useState<any>(null)
   const [selectedFile, setSelectedFile] = useState<any>(null)
+  
+  // Debug: Log selectedFile changes
+  useEffect(() => {
+    console.log('Selected file changed:', selectedFile);
+  }, [selectedFile]);
   const [expandedFolders, setExpandedFolders] = useState(new Set(["root"]))
-  const [bugsDetected, setBugsDetected] = useState([])
+  const [bugsDetected, setBugsDetected] = useState<BugReport[]>([])
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   useEffect(() => {
@@ -107,6 +130,143 @@ public class DataProcessor {
     }
 }`
       
+      case 'vue':
+        return `<template>
+  <div id="app">
+    <img alt="Vue logo" src="./assets/logo.png">
+    <HelloWorld msg="Welcome to Your Vue.js App"/>
+  </div>
+</template>
+
+<script>
+import HelloWorld from './components/HelloWorld.vue'
+
+export default {
+  name: 'App',
+  components: {
+    HelloWorld
+  }
+}
+</script>
+
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  margin-top: 60px;
+}
+</style>`
+      
+      case 'html':
+        return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + Vue</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>`
+      
+      case 'css':
+        return `/* ${fileName} */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}`
+      
+      case 'json':
+        return `{
+  "name": "demo-app",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.3.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.5"
+  }
+}`
+      
+      case 'md':
+        return `# ${fileName}
+
+This is a sample README file for the project.
+
+## Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Installation
+
+\`\`\`bash
+npm install
+\`\`\`
+
+## Usage
+
+\`\`\`bash
+npm run dev
+\`\`\`
+
+## Contributing
+
+Please read CONTRIBUTING.md for details on our code of conduct.
+
+## License
+
+This project is licensed under the MIT License.`
+      
+      case 'gitignore':
+        return `# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?`
+      
       default:
         return `// ${fileName}
 // Sample code content
@@ -149,11 +309,24 @@ function example() {
                   "flex items-center gap-1 py-1 px-2 hover:bg-purple-50 cursor-pointer text-sm",
                   selectedFile?.name === file.name && "bg-purple-100"
                 )}
-                onClick={() => setSelectedFile({
-                  name: file.name,
-                  content: generateSampleCode(file.name),
-                  path: file.path
-                })}
+                onClick={() => {
+                  // Try to get actual file content first, fallback to sample code
+                  const fileContent = file.content || generateSampleCode(file.name);
+                  console.log('Setting selected file:', {
+                    name: file.name,
+                    path: file.path,
+                    hasActualContent: !!file.content,
+                    contentLength: fileContent.length
+                  });
+                  setSelectedFile({
+                    name: file.name,
+                    content: fileContent,
+                    path: file.path
+                  });
+                  // Clear previous analysis results when switching files
+                  setBugsDetected([]);
+                  setAnalysisResults([]);
+                }}
               >
                 <File className="h-4 w-4 text-gray-500" />
                 <span>{file.name}</span>
@@ -165,43 +338,140 @@ function example() {
     )
   }
 
+
+
   const findBugsAndAssign = async () => {
-    setIsAnalyzing(true)
+    if (!selectedFile) {
+      alert('Please select a file to analyze');
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    
+    try {
+      // Get the actual project developers (names, not IDs)
+      const projectDeveloperNames = getProjectDevelopers().map(dev => dev.name);
+      
+      // Prepare the payload with only the currently selected file
+      const payload = {
+        files: [{
+          name: selectedFile.name,
+          path: selectedFile.path,
+          size: 1024, // Default size
+          type: getMimeType(selectedFile.name) // Get MIME type from filename
+        }],
+        developers: projectDeveloperNames
+      };
 
-    setTimeout(() => {
-      const detectedBugs = [
-        {
-          id: 1,
-          file: selectedFile?.name || "example.js",
-          line: 7,
-          type: "Null Reference",
-          severity: "High",
-          description: "Potential null reference error when accessing object properties",
-          assignedTo: availableDevelopers.find(dev => project?.developers.includes(dev.id)) || availableDevelopers[0],
+      // Log the payload for verification
+      console.log('Sending payload to analyze:', payload);
+      
+      const response = await fetch('http://localhost:8000/analyze/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        {
-          id: 2,
-          file: selectedFile?.name || "example.js",
-          line: 12,
-          type: "Missing Validation",
-          severity: "Medium",
-          description: "Missing prop validation can cause runtime errors",
-          assignedTo: availableDevelopers.find(dev => project?.developers.includes(dev.id)) || availableDevelopers[1],
-        },
-        {
-          id: 3,
-          file: "utils.js",
-          line: 5,
-          type: "Array Bounds",
-          severity: "High",
-          description: "Loop condition may cause array index out of bounds",
-          assignedTo: availableDevelopers.find(dev => project?.developers.includes(dev.id)) || availableDevelopers[2],
-        },
-      ]
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+      }
+      
+      const bugs = await response.json() as Array<{
+        file: string;
+        line: number;
+        type: string;
+        severity: string;
+        description: string;
+        assignedTo: string;
+      }>;
+      
+      // Log the response for verification
+      console.log('Received bugs:', bugs);
+      
+      // Map the response to match our frontend bug format
+      const detectedBugs: BugReport[] = bugs.map((bug, index) => {
+        // Find the developer by name from the backend response
+        const assignedDeveloper = availableDevelopers.find(d => d.name === bug.assignedTo) || availableDevelopers[0];
+        
+        return {
+          id: index + 1,
+          file: bug.file,
+          line: bug.line,
+          type: bug.type,
+          severity: bug.severity as 'High' | 'Medium' | 'Low',
+          description: bug.description,
+          assignedTo: assignedDeveloper
+        };
+      });
+      
+      setBugsDetected(detectedBugs);
+      
+      // Group results by file for better organization
+      const resultsByFile = new Map<string, AnalysisResult>();
+      
+      bugs.forEach((bug, index) => {
+        if (!resultsByFile.has(bug.file)) {
+          resultsByFile.set(bug.file, {
+            bugs: [],
+            suggestions: [],
+            qualityScore: 7, // Default score
+            explanation: "Analysis completed"
+          });
+        }
+        
+        const fileResult = resultsByFile.get(bug.file)!;
+        fileResult.bugs.push({
+          id: index + 1,
+          file: bug.file,
+          line: bug.line,
+          type: bug.type,
+          severity: bug.severity as 'High' | 'Medium' | 'Low',
+          description: bug.description,
+          assignedTo: availableDevelopers.find(d => d.name === bug.assignedTo) || availableDevelopers[0]
+        });
+      });
+      
+      setAnalysisResults(Array.from(resultsByFile.values()));
+    } catch (error) {
+      console.error('Error analyzing code:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to analyze code: ${errorMessage}. Please check the console for details.`);      
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
-      setBugsDetected(detectedBugs)
-      setIsAnalyzing(false)
-    }, 3000)
+  const getMimeType = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    switch (extension) {
+      case 'js':
+      case 'jsx':
+        return 'text/javascript'
+      case 'ts':
+      case 'tsx':
+        return 'text/typescript'
+      case 'py':
+        return 'text/x-python'
+      case 'java':
+        return 'text/x-java-source'
+      case 'html':
+        return 'text/html'
+      case 'css':
+        return 'text/css'
+      case 'json':
+        return 'application/json'
+      case 'xml':
+        return 'application/xml'
+      case 'md':
+        return 'text/markdown'
+      case 'txt':
+        return 'text/plain'
+      default:
+        return 'text/plain'
+    }
   }
 
   const getProjectDevelopers = () => {
@@ -244,16 +514,20 @@ function example() {
               <Users className="h-4 w-4 text-gray-600" />
               <span className="text-sm text-gray-600">{getProjectDevelopers().length} team members</span>
             </div>
-            <Button onClick={findBugsAndAssign} disabled={isAnalyzing} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white">
+            <Button 
+              onClick={findBugsAndAssign} 
+              disabled={isAnalyzing || !selectedFile} 
+              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+            >
               {isAnalyzing ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Analyzing...
+                  Analyzing {selectedFile?.name}...
                 </>
               ) : (
                 <>
                   <Bug className="h-4 w-4 mr-2" />
-                  Find Bugs and Assign
+                  {selectedFile ? `Analyze ${selectedFile.name}` : 'Select a file to analyze'}
                 </>
               )}
             </Button>
@@ -283,11 +557,13 @@ function example() {
                   <Badge variant="secondary" className="text-xs">{selectedFile.path}</Badge>
                 </div>
               </div>
-              <ScrollArea className="flex-1">
-                <pre className="p-4 text-sm font-mono bg-white/50 backdrop-blur-sm min-h-full border-r">
-                  <code className="text-gray-800">{selectedFile.content}</code>
-                </pre>
-              </ScrollArea>
+                    <ScrollArea className="flex-1">
+        <pre className="p-4 text-sm font-mono bg-white/50 backdrop-blur-sm min-h-full border-r">
+          <code className="text-gray-800">
+            {selectedFile.content || '// No content available for this file.'}
+          </code>
+        </pre>
+      </ScrollArea>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -324,15 +600,88 @@ function example() {
             </div>
           </div>
 
-          {/* Detected Bugs */}
+          {/* AI Analysis Results */}
           <div className="flex-1 p-4">
             <h3 className="font-semibold mb-3 flex items-center gap-2 text-purple-700">
               <Bug className="h-4 w-4" />
-              Detected Bugs ({bugsDetected.length})
+              AI Analysis Results
+              {selectedFile && (
+                <span className="text-sm font-normal text-gray-600">
+                  for {selectedFile.name}
+                </span>
+              )}
+              <span className="text-sm font-normal text-gray-500">
+                ({bugsDetected.length} issues found)
+              </span>
             </h3>
-            <ScrollArea className="flex-1">
-              <div className="space-y-3">
-                {bugsDetected.map((bug: any) => (
+            {/* Scrollable results container */}
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              {analysisResults.length > 0 ? (
+                analysisResults.map((result, fileIndex) => (
+                  <Card key={fileIndex} className="p-4 bg-white/70 backdrop-blur-sm border-0 shadow-sm">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-gray-900">File Analysis</h4>
+                        <Badge variant="outline" className="text-xs">
+                          Quality Score: {result.qualityScore}/10
+                        </Badge>
+                      </div>
+                      {/* Bugs Section */}
+                      {result.bugs.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-sm font-medium text-red-700 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Bugs Found:
+                          </h5>
+                          {result.bugs.map((bug) => (
+                            <div key={bug.id} className="pl-3 border-l-2 border-red-200 bg-red-50/50 p-2 rounded">
+                              <div className="flex items-center justify-between mb-1">
+                                <Badge variant={bug.severity === "High" ? "destructive" : "secondary"} className="text-xs">
+                                  {bug.severity}
+                                </Badge>
+                                <span className="text-xs text-gray-500">
+                                  Line {bug.line}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700">{bug.description}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="text-xs">
+                                    {bug.assignedTo.name.split(' ').map((n: string) => n[0]).join('')}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-gray-600">Assigned to {bug.assignedTo.name}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Suggestions Section */}
+                      {result.suggestions.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-sm font-medium text-blue-700 flex items-center gap-1">
+                            <Lightbulb className="h-3 w-3" />
+                            Suggestions:
+                          </h5>
+                          {result.suggestions.map((suggestion, index) => (
+                            <div key={index} className="pl-3 border-l-2 border-blue-200 bg-blue-50/50 p-2 rounded">
+                              <p className="text-sm text-gray-700">{suggestion}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Explanation */}
+                      {result.explanation && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-600">{result.explanation}</p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                ))
+              ) : bugsDetected.length > 0 ? (
+                // Fallback to old format if analysis results not available
+                bugsDetected.map((bug: any) => (
                   <Card key={bug.id} className="p-3 bg-white/70 backdrop-blur-sm border-0 shadow-sm">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -355,9 +704,19 @@ function example() {
                       </div>
                     </div>
                   </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-8">
+                  <Bug className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>
+                    {selectedFile 
+                      ? "No analysis results yet. Click the analyze button to start analysis."
+                      : "Select a file from the project explorer to analyze it."
+                    }
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

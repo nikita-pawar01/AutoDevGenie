@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -69,18 +69,43 @@ const initialDevelopers = [
 ]
 
 export default function DevelopersPage() {
-  const [developers, setDevelopers] = useState(initialDevelopers)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterRole, setFilterRole] = useState("all")
-  const [isAddingNew, setIsAddingNew] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [developers, setDevelopers] = useState<Developer[]>([]);
+  const [isAddingNew, setIsAddingNew] = useState(false);
   const [newDeveloper, setNewDeveloper] = useState({
     name: "",
     email: "",
     role: "",
     skills: "",
     experience: "",
-  })
+  });
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterRole, setFilterRole] = useState("all")
+  const [editingId, setEditingId] = useState<number | null>(null)
+  
+  useEffect(() => {
+    const fetchDevelopers = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/employees/");
+        if (!res.ok) throw new Error("Failed to fetch developers");
+        const data = await res.json();
+
+        const processed = data.map((dev: any) => ({
+          ...dev,
+          avatar: dev.name
+            .split(" ")
+            .map((n: string) => n[0])
+            .join("")
+            .toUpperCase(),
+        }));
+
+        setDevelopers(processed);
+      } catch (error) {
+        console.error("Error fetching developers:", error);
+      }
+    };
+
+    fetchDevelopers();
+  }, []);
 
   const filteredDevelopers = developers.filter((dev) => {
     const matchesSearch =
@@ -90,25 +115,56 @@ export default function DevelopersPage() {
     const matchesRole = filterRole === "all" || dev.role === filterRole
     return matchesSearch && matchesRole
   })
+   
+  const addDeveloper = async () => {
+   if (newDeveloper.name && newDeveloper.email && newDeveloper.role) {
+     const developerData = {
+       name: newDeveloper.name,
+       email: newDeveloper.email,
+       role: newDeveloper.role,
+       skills: newDeveloper.skills.split(",").map((s) => s.trim()),
+       experience: newDeveloper.experience,
+       status: "Active",
+     };
 
-  const addDeveloper = () => {
-    if (newDeveloper.name && newDeveloper.email && newDeveloper.role) {
-      const developer = {
-        id: Date.now(),
-        ...newDeveloper,
-        skills: newDeveloper.skills.split(",").map((s) => s.trim()),
-        status: "Active",
-        avatar: newDeveloper.name
-          .split(" ")
-          .map((n) => n[0])
-          .join("")
-          .toUpperCase(),
-      }
-      setDevelopers([...developers, developer])
-      setNewDeveloper({ name: "", email: "", role: "", skills: "", experience: "" })
-      setIsAddingNew(false)
-    }
-  }
+     try {
+       const res = await fetch("http://localhost:8000/employees/", {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+         },
+         body: JSON.stringify(developerData),
+       });
+
+       if (!res.ok) throw new Error("Failed to add developer");
+
+       const result = await res.json();
+
+       const addedDev = {
+         ...developerData,
+         id: result.id,
+         avatar: developerData.name
+           .split(" ")
+           .map((n) => n[0])
+           .join("")
+           .toUpperCase(),
+       };
+
+       setDevelopers((prev) => [...prev, addedDev]);
+       setNewDeveloper({
+         name: "",
+         email: "",
+         role: "",
+         skills: "",
+         experience: "",
+       });
+       setIsAddingNew(false);
+     } catch (err) {
+       console.error("Error adding developer:", err);
+       alert("Failed to add developer. Please try again.");
+     }
+   }
+  }; 
 
   const deleteDeveloper = (id: number) => {
     setDevelopers(developers.filter((dev) => dev.id !== id))
