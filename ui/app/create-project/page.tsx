@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,43 +11,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Upload, FolderOpen, File, Plus, X } from "lucide-react"
+import { ArrowLeft, Upload, FolderOpen, File, Plus, X, Users } from "lucide-react"
 import Link from "next/link"
 
-const availableDevelopers = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@company.com",
-    role: "Frontend Developer",
-    skills: ["React", "TypeScript", "CSS"],
-    avatar: "JD",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@company.com",
-    role: "Backend Developer",
-    skills: ["Node.js", "Python", "PostgreSQL"],
-    avatar: "JS",
-  },
-  {
-    id: 3,
-    name: "Mike Johnson",
-    email: "mike@company.com",
-    role: "Full Stack Developer",
-    skills: ["React", "Node.js", "MongoDB"],
-    avatar: "MJ",
-  },
-  {
-    id: 4,
-    name: "Sarah Wilson",
-    email: "sarah@company.com",
-    role: "DevOps Engineer",
-    skills: ["Docker", "Kubernetes", "AWS"],
-    avatar: "SW",
-  },
-]
+interface Developer {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  skills: string[];
+  experience: string;
+  status: string;
+  avatar: string;
+}
 
 export default function CreateProjectPage() {
   const [projectName, setProjectName] = useState("")
@@ -55,13 +31,106 @@ export default function CreateProjectPage() {
   const [selectedDevelopers, setSelectedDevelopers] = useState<number[]>([])
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [uploadType, setUploadType] = useState<"files" | "folder" | null>(null)
+  const [availableDevelopers, setAvailableDevelopers] = useState<Developer[]>([])
+  const [isLoadingDevelopers, setIsLoadingDevelopers] = useState(true)
+  const [showAddDeveloper, setShowAddDeveloper] = useState(false)
+  const [newDeveloper, setNewDeveloper] = useState({
+    name: "",
+    email: "",
+    role: "",
+    skills: "",
+    experience: "",
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+
+  // Fetch team members from backend
+  useEffect(() => {
+    const fetchDevelopers = async () => {
+      try {
+        setIsLoadingDevelopers(true)
+        const response = await fetch("http://localhost:8000/employees/")
+        if (response.ok) {
+          const data = await response.json()
+          const processed = data.map((dev: any) => ({
+            ...dev,
+            avatar: dev.name
+              .split(" ")
+              .map((n: string) => n[0])
+              .join("")
+              .toUpperCase(),
+          }))
+          setAvailableDevelopers(processed)
+        } else {
+          console.error("Failed to fetch developers")
+          setAvailableDevelopers([])
+        }
+      } catch (error) {
+        console.error("Error fetching developers:", error)
+        setAvailableDevelopers([])
+      } finally {
+        setIsLoadingDevelopers(false)
+      }
+    }
+
+    fetchDevelopers()
+  }, [])
 
   const handleDeveloperToggle = (developerId: number) => {
     setSelectedDevelopers((prev) =>
       prev.includes(developerId) ? prev.filter((id) => id !== developerId) : [...prev, developerId],
     )
+  }
+
+  const handleAddDeveloper = async () => {
+    if (!newDeveloper.name || !newDeveloper.email || !newDeveloper.role) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/employees/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newDeveloper.name,
+          email: newDeveloper.email,
+          role: newDeveloper.role,
+          skills: newDeveloper.skills.split(",").map(s => s.trim()).filter(s => s),
+          experience: newDeveloper.experience,
+          status: "Active"
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        // Refresh the developers list
+        const updatedResponse = await fetch("http://localhost:8000/employees/")
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json()
+          const processed = data.map((dev: any) => ({
+            ...dev,
+            avatar: dev.name
+              .split(" ")
+              .map((n: string) => n[0])
+              .join("")
+              .toUpperCase(),
+          }))
+          setAvailableDevelopers(processed)
+        }
+        
+        // Reset form and hide
+        setNewDeveloper({ name: "", email: "", role: "", skills: "", experience: "" })
+        setShowAddDeveloper(false)
+      } else {
+        alert("Failed to add developer")
+      }
+    } catch (error) {
+      console.error("Error adding developer:", error)
+      alert("Failed to add developer")
+    }
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,48 +258,149 @@ export default function CreateProjectPage() {
             <CardDescription>Choose developers from your team ({selectedDevelopers.length} selected)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {availableDevelopers.map((developer) => (
-                <div
-                  key={developer.id}
-                  className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                    selectedDevelopers.includes(developer.id)
-                      ? "border-purple-300 bg-purple-50"
-                      : "border-gray-200 hover:border-purple-200"
-                  }`}
-                  onClick={() => handleDeveloperToggle(developer.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={selectedDevelopers.includes(developer.id)}
-                      onChange={() => handleDeveloperToggle(developer.id)}
-                      className="data-[state=checked]:bg-purple-600"
-                    />
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-                        {developer.avatar}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{developer.name}</p>
-                      <p className="text-sm text-gray-600">{developer.role}</p>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {developer.skills.slice(0, 2).map((skill, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {skill}
-                          </Badge>
-                        ))}
-                        {developer.skills.length > 2 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{developer.skills.length - 2}
-                          </Badge>
-                        )}
+            {isLoadingDevelopers ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                <span className="ml-2 text-gray-600">Loading team members...</span>
+              </div>
+            ) : availableDevelopers.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600 mb-4">No team members found. Add your first team member to get started.</p>
+                <Button onClick={() => setShowAddDeveloper(true)} className="bg-purple-600 hover:bg-purple-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Team Member
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {availableDevelopers.map((developer) => (
+                    <div
+                      key={developer.id}
+                      className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                        selectedDevelopers.includes(developer.id)
+                          ? "border-purple-300 bg-purple-50"
+                          : "border-gray-200 hover:border-purple-200"
+                      }`}
+                      onClick={() => handleDeveloperToggle(developer.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={selectedDevelopers.includes(developer.id)}
+                          onChange={() => handleDeveloperToggle(developer.id)}
+                          className="data-[state=checked]:bg-purple-600"
+                        />
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+                            {developer.avatar}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{developer.name}</p>
+                          <p className="text-sm text-gray-600">{developer.role}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {developer.skills.slice(0, 2).map((skill: string, index: number) => (
+                              <Badge key={index} variant="secondary" className="text-xs">
+                                {skill}
+                              </Badge>
+                            ))}
+                            {developer.skills.length > 2 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{developer.skills.length - 2}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+                
+                {/* Add Developer Button */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <Button 
+                    onClick={() => setShowAddDeveloper(true)} 
+                    variant="outline" 
+                    className="w-full border-dashed border-2 border-gray-300 hover:border-purple-400 hover:bg-purple-50"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add New Team Member
+                  </Button>
+                </div>
+              </>
+            )}
+            
+            {/* Add Developer Modal */}
+            {showAddDeveloper && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                  <h3 className="text-lg font-semibold mb-4">Add New Team Member</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="dev-name">Name *</Label>
+                      <Input
+                        id="dev-name"
+                        value={newDeveloper.name}
+                        onChange={(e) => setNewDeveloper(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Enter full name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dev-email">Email *</Label>
+                      <Input
+                        id="dev-email"
+                        type="email"
+                        value={newDeveloper.email}
+                        onChange={(e) => setNewDeveloper(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dev-role">Role *</Label>
+                      <Input
+                        id="dev-role"
+                        value={newDeveloper.role}
+                        onChange={(e) => setNewDeveloper(prev => ({ ...prev, role: e.target.value }))}
+                        placeholder="e.g., Frontend Developer"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dev-skills">Skills</Label>
+                      <Input
+                        id="dev-skills"
+                        value={newDeveloper.skills}
+                        onChange={(e) => setNewDeveloper(prev => ({ ...prev, skills: e.target.value }))}
+                        placeholder="React, TypeScript, CSS (comma separated)"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dev-experience">Experience</Label>
+                      <Input
+                        id="dev-experience"
+                        value={newDeveloper.experience}
+                        onChange={(e) => setNewDeveloper(prev => ({ ...prev, experience: e.target.value }))}
+                        placeholder="e.g., 3 years"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                    <Button onClick={handleAddDeveloper} className="flex-1">
+                      Add Developer
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowAddDeveloper(false)
+                        setNewDeveloper({ name: "", email: "", role: "", skills: "", experience: "" })
+                      }}
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

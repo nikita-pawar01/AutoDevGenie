@@ -12,6 +12,7 @@ class FileMeta(BaseModel):
     size: int
     type: str
     path: str
+    content: Optional[str] = None
 
 class User(BaseModel):
     name: str

@@ -6,12 +6,15 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ChevronRight, ChevronDown, File, Bug, Users, FolderOpen, ArrowLeft, Lightbulb, AlertTriangle, CheckCircle } from "lucide-react"
+import { ChevronRight, ChevronDown, File, Bug, Users, FolderOpen, ArrowLeft, Lightbulb, AlertTriangle, CheckCircle, GitBranch, RefreshCw, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
-const availableDevelopers = [
+// Local cache used before remote fetch completes
+const FALLBACK_DEVELOPERS = [
   { id: 1, name: "John Doe", email: "john@company.com", role: "Frontend Developer", avatar: "JD" },
   { id: 2, name: "Jane Smith", email: "jane@company.com", role: "Backend Developer", avatar: "JS" },
   { id: 3, name: "Mike Johnson", email: "mike@company.com", role: "Full Stack Developer", avatar: "MJ" },
@@ -19,6 +22,8 @@ const availableDevelopers = [
 ]
 
 export default function CodeViewer() {
+  type Developer = typeof FALLBACK_DEVELOPERS[number]
+  
   const searchParams = useSearchParams()
   const projectId = searchParams.get("project")
   
@@ -29,7 +34,7 @@ export default function CodeViewer() {
     type: string;
     severity: 'High' | 'Medium' | 'Low';
     description: string;
-    assignedTo: typeof availableDevelopers[0];
+    assignedTo: Developer;
   }
 
   interface AnalysisResult {
@@ -48,8 +53,16 @@ export default function CodeViewer() {
   }, [selectedFile]);
   const [expandedFolders, setExpandedFolders] = useState(new Set(["root"]))
   const [bugsDetected, setBugsDetected] = useState<BugReport[]>([])
+  const [developers, setDevelopers] = useState<Developer[]>(FALLBACK_DEVELOPERS)
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [showGitHubModal, setShowGitHubModal] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [githubConfig, setGithubConfig] = useState({
+    repository: "",
+    branch: "main",
+    accessToken: ""
+  })
 
   useEffect(() => {
     if (projectId) {
@@ -62,6 +75,29 @@ export default function CodeViewer() {
       }
     }
   }, [projectId])
+
+  // Fetch developers list once on mount
+  useEffect(() => {
+    const fetchDevelopers = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/employees/')
+        if (!res.ok) throw new Error(`Status ${res.status}`)
+        const devs = await res.json()
+        // Expecting backend returns array with _id or id; normalise
+        const formatted = devs.map((d: any, idx: number) => ({
+          id: d.id || idx + 1,
+          name: d.name,
+          email: d.email,
+          role: d.role,
+          avatar: d.name.split(' ').map((n: string)=>n[0]).join('').substring(0,2).toUpperCase()
+        }))
+        setDevelopers(formatted)
+      } catch (e) {
+        console.error('Failed to fetch developers, using fallback', e)
+      }
+    }
+    fetchDevelopers()
+  }, [])
 
   const buildFileTree = (files: any[]) => {
     // For demo purposes, we'll create a simple file structure
@@ -319,9 +355,9 @@ function example() {
                     contentLength: fileContent.length
                   });
                   setSelectedFile({
-                    name: file.name,
+                  name: file.name,
                     content: fileContent,
-                    path: file.path
+                  path: file.path
                   });
                   // Clear previous analysis results when switching files
                   setBugsDetected([]);
@@ -394,15 +430,15 @@ function example() {
       // Map the response to match our frontend bug format
       const detectedBugs: BugReport[] = bugs.map((bug, index) => {
         // Find the developer by name from the backend response
-        const assignedDeveloper = availableDevelopers.find(d => d.name === bug.assignedTo) || availableDevelopers[0];
+        const assignedDeveloper = developers.find(d => d.name === bug.assignedTo) || developers[0];
         
         return {
-          id: index + 1,
-          file: bug.file,
-          line: bug.line,
-          type: bug.type,
-          severity: bug.severity as 'High' | 'Medium' | 'Low',
-          description: bug.description,
+        id: index + 1,
+        file: bug.file,
+        line: bug.line,
+        type: bug.type,
+        severity: bug.severity as 'High' | 'Medium' | 'Low',
+        description: bug.description,
           assignedTo: assignedDeveloper
         };
       });
@@ -430,7 +466,7 @@ function example() {
           type: bug.type,
           severity: bug.severity as 'High' | 'Medium' | 'Low',
           description: bug.description,
-          assignedTo: availableDevelopers.find(d => d.name === bug.assignedTo) || availableDevelopers[0]
+          assignedTo: developers.find(d => d.name === bug.assignedTo) || developers[0]
         });
       });
       
@@ -476,7 +512,69 @@ function example() {
 
   const getProjectDevelopers = () => {
     if (!project) return []
-    return availableDevelopers.filter(dev => project.developers.includes(dev.id))
+    return developers.filter(dev => project.developers.includes(dev.id))
+  }
+
+  const syncWithGitHub = async () => {
+    if (!githubConfig.repository || !githubConfig.accessToken) {
+      alert('Please configure GitHub repository and access token')
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      // Call backend to sync with GitHub
+      const response = await fetch('http://localhost:8000/sync-github/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          repository: githubConfig.repository,
+          branch: githubConfig.branch,
+          accessToken: githubConfig.accessToken,
+          projectId: projectId
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to sync: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      
+      // Update project files with new data from GitHub
+      if (result.files && result.files.length > 0) {
+        const updatedProject = {
+          ...project,
+          files: result.files
+        }
+        setProject(updatedProject)
+        
+        // Update localStorage
+        const existingProjects = JSON.parse(localStorage.getItem("autodevgenie-projects") || "[]")
+        const updatedProjects = existingProjects.map((p: any) => 
+          p.id === Number.parseInt(projectId!) ? updatedProject : p
+        )
+        localStorage.setItem("autodevgenie-projects", JSON.stringify(updatedProjects))
+        
+        // Clear analysis results since files have changed
+        setBugsDetected([])
+        setAnalysisResults([])
+        
+        alert(`Successfully synced ${result.files.length} files from GitHub!`)
+      }
+    } catch (error) {
+      console.error('Error syncing with GitHub:', error)
+      alert(`Failed to sync with GitHub: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsSyncing(false)
+      setShowGitHubModal(false)
+    }
+  }
+
+  const handleGitHubConfig = () => {
+    setShowGitHubModal(true)
   }
 
   if (!project) {
@@ -514,6 +612,14 @@ function example() {
               <Users className="h-4 w-4 text-gray-600" />
               <span className="text-sm text-gray-600">{getProjectDevelopers().length} team members</span>
             </div>
+            <Button 
+              onClick={handleGitHubConfig} 
+              variant="outline" 
+              className="border-gray-300 hover:border-purple-400"
+            >
+              <GitBranch className="h-4 w-4 mr-2" />
+              Sync GitHub
+            </Button>
             <Button 
               onClick={findBugsAndAssign} 
               disabled={isAnalyzing || !selectedFile} 
@@ -557,13 +663,13 @@ function example() {
                   <Badge variant="secondary" className="text-xs">{selectedFile.path}</Badge>
                 </div>
               </div>
-                    <ScrollArea className="flex-1">
-        <pre className="p-4 text-sm font-mono bg-white/50 backdrop-blur-sm min-h-full border-r">
+              <ScrollArea className="flex-1">
+                <pre className="p-4 text-sm font-mono bg-white/50 backdrop-blur-sm min-h-full border-r">
           <code className="text-gray-800">
             {selectedFile.content || '// No content available for this file.'}
           </code>
-        </pre>
-      </ScrollArea>
+                </pre>
+              </ScrollArea>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -619,7 +725,7 @@ function example() {
               {analysisResults.length > 0 ? (
                 analysisResults.map((result, fileIndex) => (
                   <Card key={fileIndex} className="p-4 bg-white/70 backdrop-blur-sm border-0 shadow-sm">
-                    <div className="space-y-3">
+              <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium text-gray-900">File Analysis</h4>
                         <Badge variant="outline" className="text-xs">
@@ -716,10 +822,81 @@ function example() {
                   </p>
                 </div>
               )}
-            </div>
+              </div>
           </div>
         </div>
       </div>
+
+      {/* GitHub Configuration Modal */}
+      {showGitHubModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              GitHub Repository Sync
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <Label
+                 htmlFor="repo-url">Repository URL *</Label>
+                <Input
+                  id="repo-url"
+                  value={githubConfig.repository}
+                  onChange={(e) => setGithubConfig(prev => ({ ...prev, repository: e.target.value }))}
+                  placeholder="https://github.com/username/repository"
+                />
+              </div>
+              <div>
+                <Label htmlFor="branch">Branch</Label>
+                <Input
+                  id="branch"
+                  value={githubConfig.branch}
+                  onChange={(e) => setGithubConfig(prev => ({ ...prev, branch: e.target.value }))}
+                  placeholder="main"
+                />
+              </div>
+              <div>
+                <Label htmlFor="access-token">GitHub Access Token *</Label>
+                <Input
+                  id="access-token"
+                  type="password"
+                  value={githubConfig.accessToken}
+                  onChange={(e) => setGithubConfig(prev => ({ ...prev, accessToken: e.target.value }))}
+                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Create a personal access token in GitHub Settings → Developer settings → Personal access tokens
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <Button 
+                onClick={syncWithGitHub} 
+                disabled={isSyncing}
+                className="flex-1"
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <GitBranch className="h-4 w-4 mr-2" />
+                    Sync Repository
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowGitHubModal(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

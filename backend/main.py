@@ -14,6 +14,8 @@ import random
 import requests
 import re
 from pydantic import BaseModel
+from github import Github
+import base64
 
 load_dotenv()
 class Employee(BaseModel):
@@ -181,14 +183,27 @@ def parse_ai_response(response: str) -> dict:
             "explanation": f"Parsing failed: {str(e)}"
         }
 
-async def get_best_developer(last_author: str) -> str:
-    """Mock function to get the best developer for assignment"""
-    # In a real implementation, this would use ML or rules to assign developers
-    # For now, return the last author or a random developer
-    developers = ["John Doe", "Jane Smith", "Mike Johnson", "Sarah Wilson"]
-    if last_author in developers:
+async def get_best_developer(last_author: str, team_developers: List[str] = None) -> str:
+    """Get the best developer for assignment from the project team.
+    
+    Args:
+        last_author: The last author of the file
+        team_developers: List of developer names in the project team
+        
+    Returns:
+        Name of the assigned developer
+    """
+    if team_developers and last_author in team_developers:
         return last_author
-    return random.choice(developers)
+    
+    # If last_author not in team or no last_author, pick a random developer from the team
+    if team_developers:
+        return random.choice(team_developers)
+        
+    # Fallback to any developer if no team specified (shouldn't happen in normal flow)
+    all_devs = await employee_collection.find({}, {"name": 1, "_id": 0}).to_list(length=100)
+    all_dev_names = [d["name"] for d in all_devs] if all_devs else []
+    return random.choice(all_dev_names) if all_dev_names else "Unassigned"
 
 def post_to_slack(file_name: str, llm_response: str, assigned_dev: str):
     """Mock function to post to Slack"""
@@ -305,7 +320,7 @@ async def get_projects():
 @app.post("/analyze/", response_model=List[BugReport])
 async def analyze_project(
     files: List[FileMeta] = Body(...),
-    developers: List[str] = Body(...)  # Optional, now unused
+    developers: List[str] = Body(...)  # List of developer names in the project team
 ):
     bugs = []
     for idx, file in enumerate(files):
@@ -321,8 +336,12 @@ async def analyze_project(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"LLM analysis failed: {e}")
         
-        # 4. Developer assignment
-        assigned_dev = await get_best_developer(last_author)
+        # 4. Developer assignment - only assign to developers in the project team
+        if developers:  # If developers list is provided, use it for assignment
+            assigned_dev = await get_best_developer(last_author, developers)
+        else:
+            # Fallback to any developer if no team specified (shouldn't happen in normal flow)
+            assigned_dev = await get_best_developer(last_author)
         
         # 5. Slack ticket
         post_to_slack(file.name, str(llm_analysis), assigned_dev)
@@ -330,14 +349,14 @@ async def analyze_project(
         # 6. Create bug reports for each bug found
         for bug_idx, bug_description in enumerate(llm_analysis.get("bugs", [])):
             bugs.append(BugReport(
-                id=len(bugs) + 1,
+                    id=len(bugs) + 1,
                 file=file.name,
                 line=7,  # Placeholder — extract from LLM if possible
-                type="AI Detected",
-                severity="High" if llm_analysis.get("quality_score", 5) < 6 else "Medium",
-                description=bug_description,
-                assignedTo=assigned_dev
-            ))
+                    type="AI Detected",
+                    severity="High" if llm_analysis.get("quality_score", 5) < 6 else "Medium",
+                    description=bug_description,
+                    assignedTo=assigned_dev
+                ))
         
         # If no bugs found, create a general report
         if not llm_analysis.get("bugs"):
@@ -348,10 +367,152 @@ async def analyze_project(
                 type="Code Review",
                 severity="Low",
                 description=f"Code Quality Score: {llm_analysis.get('quality_score', 5)}/10. {llm_analysis.get('explanation', 'No issues found')}",
-                assignedTo=assigned_dev
-            ))
+            assignedTo=assigned_dev
+        ))
     
     return bugs
+
+# GitHub Sync Endpoint
+@app.post("/sync-github/", response_model=dict)
+async def sync_github_repository(
+    repository: str = Body(...),
+    branch: str = Body(default="main"),
+    access_token: str = Body(...),
+    project_id: str = Body(...)
+):
+    """Sync project files from GitHub repository"""
+    try:
+        # Initialize GitHub API
+        g = Github(access_token)
+        
+        # Extract owner and repo name from URL
+        # Expected format: https://github.com/owner/repo
+        if "github.com" in repository:
+            parts = repository.split("github.com/")[1].split("/")
+            if len(parts) >= 2:
+                owner = parts[0]
+                repo_name = parts[1].replace(".git", "")
+            else:
+                raise HTTPException(status_code=400, detail="Invalid repository URL format")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid repository URL")
+        
+        # Get repository
+        try:
+            repo = g.get_repo(f"{owner}/{repo_name}")
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Repository not found or access denied: {str(e)}")
+        
+        # Get files from repository
+        files = []
+        try:
+            contents = repo.get_contents("", ref=branch)
+            files = get_files_recursively(repo, contents, branch)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching repository contents: {str(e)}")
+        
+        # Convert to FileMeta format and fetch content for code files
+        file_metas = []
+        for file_info in files:
+            if file_info['type'] == 'file':
+                # Only fetch content for code files (not binary files)
+                file_extension = file_info['name'].split('.').pop().lower() if '.' in file_info['name'] else ''
+                code_extensions = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'html', 'css', 'json', 'xml', 'md', 'txt', 'vue', 'php', 'rb', 'go', 'rs', 'cpp', 'c', 'h', 'sql', 'sh', 'yml', 'yaml', 'toml', 'ini', 'conf', 'gitignore', 'dockerfile', 'makefile', 'cmake', 'gradle', 'pom', 'lock', 'log']
+                
+                file_meta = FileMeta(
+                    name=file_info['name'],
+                    path=file_info['path'],
+                    size=file_info['size'],
+                    type=get_mime_type(file_info['name'])
+                )
+                
+                # Add content for code files
+                if file_extension in code_extensions:
+                    try:
+                        file_content = repo.get_contents(file_info['path'], ref=branch)
+                        if hasattr(file_content, 'decoded_content'):
+                            file_meta.content = file_content.decoded_content.decode('utf-8')
+                        else:
+                            file_meta.content = file_content.content
+                    except Exception as e:
+                        print(f"Error fetching content for {file_info['path']}: {e}")
+                        file_meta.content = f"// Error loading content for {file_info['name']}"
+                
+                file_metas.append(file_meta)
+        
+        return {
+            "success": True,
+            "files": [file.dict() for file in file_metas],
+            "message": f"Successfully synced {len(file_metas)} files from {owner}/{repo_name}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitHub sync failed: {str(e)}")
+
+def get_files_recursively(repo, contents, branch):
+    """Recursively get all files from repository"""
+    files = []
+    for content in contents:
+        if content.type == "file":
+            files.append({
+                "name": content.name,
+                "path": content.path,
+                "size": content.size,
+                "type": "file"
+            })
+        elif content.type == "dir":
+            try:
+                sub_contents = repo.get_contents(content.path, ref=branch)
+                files.extend(get_files_recursively(repo, sub_contents, branch))
+            except Exception:
+                continue
+    return files
+
+def get_mime_type(filename: str) -> str:
+    """Get MIME type based on file extension"""
+    extension = filename.split('.').pop().lower() if '.' in filename else ''
+    
+    mime_types = {
+        'js': 'text/javascript',
+        'jsx': 'text/javascript',
+        'ts': 'text/typescript',
+        'tsx': 'text/typescript',
+        'py': 'text/x-python',
+        'java': 'text/x-java-source',
+        'html': 'text/html',
+        'css': 'text/css',
+        'json': 'application/json',
+        'xml': 'application/xml',
+        'md': 'text/markdown',
+        'txt': 'text/plain',
+        'vue': 'text/x-vue',
+        'php': 'text/x-php',
+        'rb': 'text/x-ruby',
+        'go': 'text/x-go',
+        'rs': 'text/x-rust',
+        'cpp': 'text/x-c++src',
+        'c': 'text/x-csrc',
+        'h': 'text/x-chdr',
+        'sql': 'text/x-sql',
+        'sh': 'text/x-sh',
+        'yml': 'text/yaml',
+        'yaml': 'text/yaml',
+        'toml': 'text/x-toml',
+        'ini': 'text/x-ini',
+        'conf': 'text/x-config',
+        'gitignore': 'text/plain',
+        'dockerfile': 'text/x-dockerfile',
+        'makefile': 'text/x-makefile',
+        'cmake': 'text/x-cmake',
+        'gradle': 'text/x-gradle',
+        'pom': 'application/xml',
+        'lock': 'text/plain',
+        'log': 'text/plain'
+    }
+    
+    return mime_types.get(extension, 'text/plain')
 
 def generate_mock_code(file_name: str) -> str:
     """Generate mock code content for demo purposes"""
